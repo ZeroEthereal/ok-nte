@@ -38,10 +38,17 @@ All issues and consequences arising from the use of this software are not relate
 </p>
 
 - **Background Operation**: Automate game actions while in the background.
+- **One-click Dailies**: Automatically complete daily routines.
 - **Auto Fishing**: Fully automated fishing process.
 - **Auto Combat**: Computer vision-based combat algorithm.
+- **Anomaly**: Automate Anomaly challenges.
+- **Auto Drum Rhythm Game**: Automatically complete drum rhythm games.
+- **Owner's Selection**: Automatically loop entering and exiting stages (requires an in-game AFK build).
 - **Skip Dialog**: Rapidly skip through story dialogs.
 - **Fast Travel**: Automatic map teleportation.
+- **Pink Paws Heist Convenience Features**
+  - **Quick Pickup**: Quickly pick up items in stages.
+  - **Auto Character Switch for Sprinting**: Automatically switch characters to maintain fast running.
 - **Character Center**
   - **Character Management**: Supports custom combo lists.
   - **Feature Management**: Adapts to different character skins.
