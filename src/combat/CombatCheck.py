@@ -277,9 +277,9 @@ class CombatCheck(BaseNTETask):
             return True
         return False
 
-    def _find_red_health_bar(self):
+    def _find_red_health_bar(self, width=100):
         min_height = self.height_of_screen(5 / 1440)
-        min_width = self.width_of_screen(100 / 2560)
+        min_width = self.width_of_screen(width / 2560)
         # if self._in_combat:
         #     min_width = self.width_of_screen(100 / 2560)
         # else:

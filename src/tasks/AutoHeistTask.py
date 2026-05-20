@@ -11,13 +11,15 @@ from src.tasks.NTEOneTimeTask import NTEOneTimeTask
 from src.utils import game_filters as gf
 
 
+class AbortException(Exception):
+    pass
+
+
 class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
     CONF_LOOP_COUNT = "循环次数"
     CONF_PATH = "路径"
-    CONF_NANALLY = "娜娜莉位置"
-    CONF_MINT = "薄荷位置"
-    CONF_DOGBRO = "狗哥位置"
-    CONF_SAKIRI = "早雾位置"
+    CONF_FIGHTER = "战斗角色"
+    CONF_RUNNER = "跑图角色"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -31,28 +33,25 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
             {
                 self.CONF_LOOP_COUNT: 0,
                 self.CONF_PATH: paths_name[0],
-                self.CONF_NANALLY: 1,
-                self.CONF_MINT: 2,
-                self.CONF_DOGBRO: 3,
-                self.CONF_SAKIRI: 4,
+                self.CONF_FIGHTER: ["4", "1"],
+                self.CONF_RUNNER: ["3"],
             }
         )
         self.config_description.update(
             {
                 self.CONF_LOOP_COUNT: "循环次数, 设置为0则一直运行",
-                self.CONF_NANALLY: "娜娜莉在几号位 (没有的话或许可以换成其他攻击不会转视角的角色)",
-                self.CONF_MINT: "薄荷在几号位",
-                self.CONF_DOGBRO: "狗哥在几号位",
-                self.CONF_SAKIRI: "早雾在几号位",
             }
         )
 
+        options = ["1", "2", "3", "4"]
         self.config_type.update(
             {
                 self.CONF_PATH: {
                     "type": "drop_down",
                     "options": paths_name,
                 },
+                self.CONF_FIGHTER: {"type": "multi_selection", "options": options},
+                self.CONF_RUNNER: {"type": "multi_selection", "options": options},
             }
         )
         self._scroll_switch = False
@@ -96,12 +95,14 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
 
             if self.wait_until(self.find_interac, time_out=20, raise_if_not_found=True):
                 self.enter_heist()
-                if not self.wait_until(self.in_heist, time_out=60):
+                if not self.wait_until(self.in_heist, time_out=120):
                     self.heist_error()
                     continue
-                self.sleep(1.00)
 
-                if self.run_path() is False:
+                try:
+                    self.run_path()
+                except AbortException as e:
+                    self.log_warning(e)
                     self.heist_error()
                     continue
 
@@ -225,7 +226,7 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
 
     def _spam_key_loop(self):
         if self.quick_pick.is_set() and time.time() >= getattr(self.quick_pick, "ready_at", 0):
-            self.send_key("f", interval=0.25)
+            self.send_key("f", interval=0.25, down_time=0.002)
             self._alternate_scroll(interval=0.25)
         if not self.enabled or not self.running:
             self.log_info("spam_key_loop stop")
@@ -254,10 +255,84 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
         """检查是否在指定楼层"""
         floor_str = "LG" + str(floor)
         ret = self.wait_ocr(0.04, 0.235, 0.11, 0.275, match=re.compile("LG.*"), time_out=10)
-        if ret:
-            return floor_str in ret[0].name
-        return False
+        if ret and floor_str in ret[0].name:
+            return
+        raise AbortException(f"not in floor {floor}")
 
     def in_heist(self):
-        ret = self.ocr(0.023, 0.340, 0.084, 0.379, match=re.compile("本局收益"))
-        return bool(ret)
+        ret = self.is_in_team() and self.ocr(
+            0.023, 0.340, 0.084, 0.379, match=re.compile("本局收益")
+        )
+        return ret
+
+    def switch_to_fighter(self):
+        keys = self.config.get(self.CONF_FIGHTER, [])
+        for key in keys:
+            self.send_key(key)
+            if self.wait_until(lambda: not self.is_in_team(), time_out=0.5):
+                self.log_info(f"char {key} is dead")
+                self.wait_until(
+                    self.is_in_team, pre_action=lambda: self.send_key("esc", interval=2)
+                )
+            else:
+                break
+        else:
+            raise AbortException(f"fighter {keys} dead or empty")
+
+    def switch_to_runner(self):
+        keys = self.config.get(self.CONF_RUNNER, [])
+        for key in keys:
+            self.send_key(key)
+            if self.wait_until(lambda: not self.is_in_team(), time_out=0.5):
+                self.log_info(f"char {key} is dead")
+                self.wait_until(
+                    self.is_in_team, pre_action=lambda: self.send_key("esc", interval=2)
+                )
+            else:
+                break
+        else:
+            raise AbortException(f"runner {keys} dead or empty")
+
+    def jump_combat_once(self):
+        self.switch_to_fighter()
+        self.wait_until(self.has_health_bar)
+        deadline = time.time() + 60
+        settle = -1
+        while time.time() < deadline:
+            if settle < 0:
+                self.send_key("space")
+                self.sleep(0.25)
+                self.click()
+                self.sleep(0.4)
+                self.next_frame()
+            else:
+                self.sleep(0.1)
+            if not self._find_red_health_bar(10):
+                if settle < 0:
+                    settle = time.time()
+                if time.time() - settle > 2:
+                    break
+            else:
+                settle = -1
+        else:
+            raise AbortException("timeout for combat_once")
+        self.switch_to_runner()
+
+    def wait_send_interac(self, direction="w", key_up_sleep=0.7, is_lock=False):
+        """test"""
+        self.wait_until(self.find_interac)
+        self.send_key_up(direction)
+        self.sleep(key_up_sleep)
+        self.wait_until(
+            lambda: not self.find_interac(), pre_action=lambda: self.send_key("f", interval=1)
+        )
+        if is_lock:
+            return not self.wait_until(self.find_interac, time_out=4.7)
+        return True
+
+    # def find_interac_text(self, text):
+    #     box = self.find_interac()
+    #     if not box:
+    #         return False
+    #     box = box.copy(x_offset=box.width, width_offset=box.width * 3)
+    #     return bool(self.ocr(box=box, match=re.compile(text)))
