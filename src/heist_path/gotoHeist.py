@@ -3,7 +3,7 @@ from src.heist_path.HeistPath import HeistPath
 # 寻路到小吱
 class gotoHeist(HeistPath):
     def run_path(self):
-        self.goto_Heist()
+        return self.goto_Heist()
 
     def goto_Heist(self):
         self.log_round_info("正在寻路到小吱")
