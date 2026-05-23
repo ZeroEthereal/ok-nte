@@ -38,24 +38,33 @@ class CharacterSwitchState:
         return self.index < len(self.keys)
 
 
-INST = r"""
-        <div style="color:#FF5555;">
-            <strong>📍 步骤起点：站在可互动小吱的位置开始</strong>
-        </div>
-        <div style="color:yellow; margin-top:4px;">
-            <strong>⚙️ 镜头设置：控制 ➔ 移动镜头修正 ➔ 禁用</strong>
-        </div>
-        <div style="color:white; margin-top:12px;">
-            <strong>路径1推荐设置</strong>
-            <div style="margin-left:2em; margin-top:2px;">战斗角色: 主角 / 哈尼娅</div>
-            <div style="margin-left:2em; margin-top:2px;">跑图角色: 薄荷</div>
-            <div style="margin-left:2em; margin-top:2px;">避战角色(可选): 翳 / 浔</div>
-            strong>路径2推荐设置</strong>
-            <div style="margin-left:2em; margin-top:2px;">战斗角色: 早雾（必须，战斗角色中最前） / 主角 / 哈尼娅</div>
-            <div style="margin-left:2em; margin-top:2px;">跑图角色: 薄荷</div>
-            <div style="margin-left:2em; margin-top:2px;">避战角色: 翳/div>
-        </div>
-    """
+def _inst_line(text: str, color: str = "white", *, bold: bool = False, indent: int = 0):
+    content = f"{'&nbsp;' * (indent * 4)}{text}"
+    if bold:
+        content = f"<strong>{content}</strong>"
+    return f'<span style="color:{color};">{content}</span>'
+
+
+def _inst_gap():
+    return '<span style="font-size:4px;">&nbsp;</span>'
+
+
+INST = "<br>".join(
+    [
+        _inst_line("📍 步骤起点：站在可互动小吱的位置开始", "#FF5555", bold=True),
+        _inst_line("⚙️ 镜头设置：控制 ➔ 移动镜头修正 ➔ 禁用", "yellow", bold=True),
+        _inst_gap(),
+        _inst_line("路径1推荐设置", bold=True),
+        _inst_line("战斗角色: 主角 / 哈尼娅", indent=1),
+        _inst_line("跑图角色: 薄荷", indent=1),
+        _inst_line("避战角色(可选): 翳 / 浔", indent=1),
+        _inst_gap(),
+        _inst_line("路径2推荐设置", bold=True),
+        _inst_line("战斗角色: 早雾（必须，战斗角色中最前） / 主角 / 哈尼娅", indent=1),
+        _inst_line("跑图角色: 薄荷", indent=1),
+        _inst_line("避战角色: 翳", indent=1),
+    ]
+)
 
 
 class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
@@ -85,7 +94,7 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
         self.supported_languages = ["zh_CN"]
         self.paths = {
             "路径1(路线参考自B站UP: 早柚大魔王丶)": HeistPathA,
-            "路径2(优化了大厅到办公层的路线，其他参考自B站UP: 早柚大魔王丶)": HeistPathB,
+            "路径2(在路径1基础上优化了大厅到办公层的路线)": HeistPathB,
         }
         path_names = list(self.paths.keys())
         self.avoid_methods = [self.AVOID_METHOD_DASH, self.AVOID_METHOD_ATTACK]
@@ -102,6 +111,7 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
         self.config_description.update(
             {
                 self.CONF_LOOP_COUNT: "循环次数, 设置为0则一直运行",
+                self.CONF_PATH: "使用任何路径前请先阅读使用说明",
                 self.CONF_FIGHTER: "选1~2个",
                 self.CONF_RUNNER: "选1个",
                 self.CONF_AVOIDER: "选0~1个",
@@ -170,9 +180,7 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
             count += 1
             self._prepare_round(count, total, endless)
 
-            rewards = self._run_heist_round()
-            if rewards is not None:
-                self._add_rewards_to_summary(*rewards)
+            self._run_heist_round()
 
             self.next_frame()
 
@@ -253,13 +261,10 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
 
     def _update_sleep_check_interval(self):
         needs_fast_poll = (
-            (self._interaction_watch_active and not self._interaction_watch_found)
-            or self._switch_state is not None
-        )
+            self._interaction_watch_active and not self._interaction_watch_found
+        ) or self._switch_state is not None
         self.sleep_check_interval = (
-            self.SLEEP_CHECK_INTERVAL
-            if needs_fast_poll
-            else self.DEFAULT_SLEEP_CHECK_INTERVAL
+            self.SLEEP_CHECK_INTERVAL if needs_fast_poll else self.DEFAULT_SLEEP_CHECK_INTERVAL
         )
 
     def start_interaction_watch(self):
@@ -509,10 +514,10 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
         )
         if self.is_in_team_outside_heist():
             self.log_round_info("当前已在队伍界面且不在粉爪副本中，跳过离开副本")
-            return 0, 0
+            return False
 
         self.sleep(1)
-        earnfcash, earnpcoin = self.get_heist_rewards()
+        rewards = self.get_heist_rewards()
         self.wait_until(
             lambda: not self.has_extract_panel(),
             pre_action=lambda: self.operate_click(0.604, 0.701, interval=1),
@@ -526,10 +531,11 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
             lambda: not in_sum_panel(),
             pre_action=lambda: self.operate_click(0.501, 0.864, interval=1),
         )
+        self._add_rewards_to_summary(*rewards)
         self.sleep(1)
         self.wait_in_team(time_out=600)
         self.log_round_info("已离开粉爪副本")
-        return earnfcash, earnpcoin
+        return True
 
     def send_key_down(self, key, after_sleep=0):
         """按住按键。
@@ -624,7 +630,10 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
 
     def ensure_in_team(self):
         """等待回到队伍界面；等待期间会周期性按 `esc` 关闭可能的面板。"""
-        self.wait_until(self.is_in_team, pre_action=lambda: self.send_key("esc", interval=2))
+        self.wait_until(
+            self.is_in_team,
+            pre_action=lambda: self.send_key("esc", action_name="ensure_in_team", interval=2),
+        )
 
     def check_current_floor(self, floor=1):
         """检查左上角楼层是否为指定 LG 楼层，不匹配则中断路径。"""
@@ -829,13 +838,14 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
         if self.wait_until(self.find_interac):
             if direction is not None:
                 self.send_key_up(direction)
-                self.sleep(0.40)
+                self.sleep(0.30)
             ret = self.wait_until(
                 self.has_extract_panel,
                 pre_action=lambda: self.send_key("f", interval=1),
-                time_out=2.6,
+                time_out=2.5,
             )
             if ret:
+                self.sleep(0.25)
                 self.ensure_in_team()
             return ret
         else:
