@@ -1,5 +1,3 @@
-import time
-
 from src.heist_path.HeistPath import HeistPath
 
 # 寻路到小吱
@@ -8,9 +6,9 @@ class gotoHeist(HeistPath):
         self.goto_Heist()
 
     def goto_Heist(self):
-        self.custom_log("正在寻路到小吱")
+        self.log_round_info("正在寻路到小吱")
         self.sleep(0.50)
-        self.send_key(self.config.get(self.CONF_MINT, '3'), down_time=0.15) # 确认切到薄荷跑图
+        self.switch_to_runner()
         self.sleep(0.20)
         self.send_key('s', down_time=0.73, after_sleep=0.20)
         self.send_key('a', down_time=0.10, after_sleep=0.10)
@@ -43,6 +41,6 @@ class gotoHeist(HeistPath):
         self.send_key('s', down_time=0.38, after_sleep=0.20)
         self.send_key('a', down_time=1.28, after_sleep=0.20)
         self.send_key('w', down_time=0.72, after_sleep=0.20)
-        self.custom_log("完成寻路！")
+        self.log_round_info("完成寻路！")
         self.sleep(0.30)
         return True
