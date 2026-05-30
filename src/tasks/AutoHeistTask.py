@@ -54,6 +54,7 @@ INST = "<br>".join(
         _inst_line("📍 步骤起点：站在可互动小吱的位置开始", "#FF5555", bold=True),
         _inst_line("⚙️ 镜头设置：控制 ➔ 移动镜头修正 ➔ 禁用", "#FF5555", bold=True),
         _inst_line("⚠️ 必備條件：至少有一個復活道具", "#FF5555", bold=True),
+        _inst_line("🥷 避战方式：翳【长按 Shift】/ 浔【长按攻击】", "#FF5555", bold=True),
         _inst_gap(),
         _inst_line("路径1推荐设置", bold=True),
         _inst_line("FPS: 60~120", indent=1),
